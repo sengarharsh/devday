@@ -1,11 +1,78 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const CATEGORIES = ["DSA", "React", "Java", "Project", "Other"]
+const CATEGORIES = ["DSA", "React", "Java", "Project", "Other"];
 
-const Tasks = () => {
-  const [tasks, setTasks] = useState([])
+const getTodayDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const Tasks = ({ initialTasks = [] } = {}) => {
+  const [tasks, setTasks] = useState(() => {
+    const today = getTodayDateString();
+    return initialTasks.map((task) =>
+      task.isDaily && task.completed && task.lastCompletedDate !== today
+        ? { ...task, completed: false, lastCompletedDate: null }
+        : task
+    );
+  });
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("React")
+  const [category, setCategory] = useState("React");
+  const [isDaily, setIsDaily] = useState(false);
+
+  const checkAndResetDailyTasks = () => {
+    const today = getTodayDateString();
+    setTasks((prevTasks) => {
+      let hasChanges = false;
+      const updated = prevTasks.map((task) => {
+        if (task.isDaily && task.completed && task.lastCompletedDate !== today) {
+          hasChanges = true;
+          return { ...task, completed: false, lastCompletedDate: null };
+        }
+        return task;
+      });
+      return hasChanges ? updated : prevTasks;
+    });
+  };
+
+  useEffect(() => {
+    checkAndResetDailyTasks();
+
+    let timeoutId;
+    const scheduleMidnightReset = () => {
+      const now = new Date();
+      const nextMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0, 0, 0, 100
+      );
+      const msUntilMidnight = Math.max(nextMidnight.getTime() - now.getTime(), 1000);
+
+      timeoutId = setTimeout(() => {
+        checkAndResetDailyTasks();
+        scheduleMidnightReset();
+      }, msUntilMidnight);
+    };
+
+    scheduleMidnightReset();
+
+    const handleVisibilityOrFocus = () => {
+      checkAndResetDailyTasks();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+    };
+  }, []);
 
   const handleAddTask = (e) => {
     e.preventDefault();
@@ -15,20 +82,30 @@ const Tasks = () => {
       id: Date.now().toString(),
       title: title.trim(),
       category,
-      completed: false
-    }
+      isDaily,
+      completed: false,
+      lastCompletedDate: null
+    };
 
     setTasks((prevTasks) => [newTask, ...prevTasks]);
-    setTitle("")
-  }
+    setTitle("");
+    setIsDaily(false);
+  };
 
   const handleToggleTask = (id) => {
+    const today = getTodayDateString();
     setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    )
-  }
+      prevTasks.map((task) => {
+        if (task.id !== id) return task;
+        const nextCompleted = !task.completed;
+        return {
+          ...task,
+          completed: nextCompleted,
+          lastCompletedDate: task.isDaily && nextCompleted ? today : null
+        };
+      })
+    );
+  };
 
   const handleDeleteTask = (id) => {
     setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
@@ -75,6 +152,18 @@ const Tasks = () => {
                   Add Task
                 </button>
               </div>
+            </div>
+            <div className="form-check mt-3">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id="isDailyTask"
+                checked={isDaily}
+                onChange={(e) => setIsDaily(e.target.checked)}
+              />
+              <label className="form-check-label text-muted" htmlFor="isDailyTask">
+                Daily Task <span className="small text-muted">(resets at midnight)</span>
+              </label>
             </div>
           </form>
         </div>
@@ -123,6 +212,11 @@ const Tasks = () => {
                     <span className="badge bg-secondary-subtle text-secondary-emphasis">
                       {task.category}
                     </span>
+                    {task.isDaily && (
+                      <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                        Daily
+                      </span>
+                    )}
                   </div>
 
                   <div className="d-flex align-items-center gap-2">
