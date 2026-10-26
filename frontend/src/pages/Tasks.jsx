@@ -1,246 +1,334 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { getAllTasks, createTask, updateTask, deleteTask } from "../api/api";
+import TaskModal from "../components/tasks/TaskModal";
+import TaskSummaryCards from "../components/tasks/TaskSummaryCards";
+import TaskItem from "../components/tasks/TaskItem";
 
 const CATEGORIES = ["DSA", "React", "Java", "Project", "Other"];
 
-const getTodayDateString = () => {
+const isToday = (dateString) => {
+  if (!dateString) return false;
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return false;
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
 };
 
-const Tasks = ({ initialTasks = [] } = {}) => {
-  const [tasks, setTasks] = useState(() => {
-    const today = getTodayDateString();
-    return initialTasks.map((task) =>
-      task.isDaily && task.completed && task.lastCompletedDate !== today
-        ? { ...task, completed: false, lastCompletedDate: null }
-        : task
-    );
-  });
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("React");
-  const [isDaily, setIsDaily] = useState(false);
+const isPreviousDay = (dateString) => {
+  if (!dateString) return true; // Missing createdAt safely treated as prior/history
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return true;
+  const now = new Date();
+  const taskDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return taskDate.getTime() < todayDate.getTime();
+};
 
-  const checkAndResetDailyTasks = () => {
-    const today = getTodayDateString();
-    setTasks((prevTasks) => {
-      let hasChanges = false;
-      const updated = prevTasks.map((task) => {
-        if (task.isDaily && task.completed && task.lastCompletedDate !== today) {
-          hasChanges = true;
-          return { ...task, completed: false, lastCompletedDate: null };
-        }
-        return task;
-      });
-      return hasChanges ? updated : prevTasks;
-    });
+const getLocalDateKey = (dateString) => {
+  if (!dateString) return "Prior Tasks (No Date)";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "Prior Tasks (No Date)";
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const Tasks = () => {
+  const [tasks, setTasks] = useState([]);
+  const [currentView, setCurrentView] = useState("active"); // "active" | "completed_today" | "history"
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [processingId, setProcessingId] = useState(null);
+
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAllTasks();
+      setTasks(data);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to load tasks from server"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    checkAndResetDailyTasks();
-
-    let timeoutId;
-    const scheduleMidnightReset = () => {
-      const now = new Date();
-      const nextMidnight = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        0, 0, 0, 100
-      );
-      const msUntilMidnight = Math.max(nextMidnight.getTime() - now.getTime(), 1000);
-
-      timeoutId = setTimeout(() => {
-        checkAndResetDailyTasks();
-        scheduleMidnightReset();
-      }, msUntilMidnight);
-    };
-
-    scheduleMidnightReset();
-
-    const handleVisibilityOrFocus = () => {
-      checkAndResetDailyTasks();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
-    window.addEventListener("focus", handleVisibilityOrFocus);
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
-      window.removeEventListener("focus", handleVisibilityOrFocus);
-    };
+    fetchTasks();
   }, []);
 
-  const handleAddTask = (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    const newTask = {
-      id: Date.now().toString(),
-      title: title.trim(),
-      category,
-      isDaily,
-      completed: false,
-      lastCompletedDate: null
-    };
-
-    setTasks((prevTasks) => [newTask, ...prevTasks]);
-    setTitle("");
-    setIsDaily(false);
+  const handleTaskCreated = async (taskPayload) => {
+    const created = await createTask(taskPayload);
+    setTasks((prevTasks) => [created, ...prevTasks]);
   };
 
-  const handleToggleTask = (id) => {
-    const today = getTodayDateString();
-    setTasks((prevTasks) =>
-      prevTasks.map((task) => {
-        if (task.id !== id) return task;
-        const nextCompleted = !task.completed;
-        return {
-          ...task,
-          completed: nextCompleted,
-          lastCompletedDate: task.isDaily && nextCompleted ? today : null
-        };
-      })
-    );
+  const handleToggleTask = async (task) => {
+    try {
+      setProcessingId(task.id);
+      setError(null);
+      const nextCompleted = !task.completed;
+      const updatedData = {
+        ...task,
+        completed: nextCompleted,
+      };
+      const updated = await updateTask(task.id, updatedData);
+      setTasks((prevTasks) =>
+        prevTasks.map((t) => (t.id === task.id ? updated : t))
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update task completion"
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
 
-  const handleDeleteTask = (id) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
+  const handleDeleteTask = async (id) => {
+    try {
+      setProcessingId(id);
+      setError(null);
+      await deleteTask(id);
+      setTasks((prevTasks) => prevTasks.filter((t) => t.id !== id));
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to delete task"
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
+
+  // 1. Active: incomplete tasks created today
+  const activeTasks = useMemo(() => {
+    return tasks.filter((t) => !t.completed && isToday(t.createdAt));
+  }, [tasks]);
+
+  // 2. Completed Today: completed tasks with completedAt matching today
+  const completedTodayTasks = useMemo(() => {
+    return tasks.filter((t) => t.completed && isToday(t.completedAt));
+  }, [tasks]);
+
+  // 3. History: tasks from previous calendar days
+  const historyTasks = useMemo(() => {
+    return tasks.filter((t) => isPreviousDay(t.createdAt));
+  }, [tasks]);
+
+  // Group history by createdAt date (newest first, tasks within each day sorted newest first)
+  const groupedHistory = useMemo(() => {
+    const sorted = [...historyTasks].sort((a, b) => {
+      if (!a.createdAt && !b.createdAt) return 0;
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    const map = new Map();
+    sorted.forEach((task) => {
+      const key = getLocalDateKey(task.createdAt);
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push(task);
+    });
+    return Array.from(map.entries());
+  }, [historyTasks]);
+
+  // Summary counts
+  const dailyTasksTotal = useMemo(() => {
+    return tasks.filter((t) => t.dailyTask || t.isDaily).length;
+  }, [tasks]);
+
+  const dailyTasksCompleted = useMemo(() => {
+    return tasks.filter((t) => (t.dailyTask || t.isDaily) && t.completed).length;
+  }, [tasks]);
 
   return (
     <div>
       {/* Page Header */}
-      <div className="mb-4">
-        <h2 className="fw-bold mb-1">Tasks</h2>
-        <p className="text-muted mb-0">Manage and track your daily development tasks.</p>
-      </div>
-
-      {/* Task Creation Form */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-body">
-          <h5 className="card-title fw-bold mb-3">Add New Task</h5>
-          <form onSubmit={handleAddTask}>
-            <div className="row g-2">
-              <div className="col-12 col-md-7">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Task title (e.g., Practice Binary Search)..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
-              <div className="col-12 col-md-3">
-                <select
-                  className="form-select"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12 col-md-2">
-                <button type="submit" className="btn btn-primary w-100">
-                  Add Task
-                </button>
-              </div>
-            </div>
-            <div className="form-check mt-3">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                id="isDailyTask"
-                checked={isDaily}
-                onChange={(e) => setIsDaily(e.target.checked)}
-              />
-              <label className="form-check-label text-muted" htmlFor="isDailyTask">
-                Daily Task <span className="small text-muted">(resets at midnight)</span>
-              </label>
-            </div>
-          </form>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="fw-bold mb-1">Tasks</h2>
+          <p className="text-muted mb-0">Manage and track your daily development tasks.</p>
         </div>
+        <button
+          type="button"
+          className="btn btn-primary d-flex align-items-center gap-2 px-3 py-2"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <span className="fw-bold fs-6">+</span> Add Task
+        </button>
       </div>
 
-      {/* Tasks List */}
+      {/* Summary Cards */}
+      <TaskSummaryCards
+        activeCount={activeTasks.length}
+        completedTodayCount={completedTodayTasks.length}
+        dailyTasksTotal={dailyTasksTotal}
+        dailyTasksCompleted={dailyTasksCompleted}
+      />
+
+      {/* Global Error Banner */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+          <div className="d-flex justify-content-between align-items-center">
+            <span>{error}</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger ms-3"
+              onClick={fetchTasks}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tasks Card with Views */}
       <div className="card shadow-sm border-0">
         <div className="card-body">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h5 className="card-title fw-bold mb-0">Your Tasks</h5>
-            <span className="badge bg-secondary">
-              {tasks.filter((t) => t.completed).length} / {tasks.length} Completed
-            </span>
+          {/* Full-width Tab Navigation (Equal 4:4:4 Grid Columns) */}
+          <div className="row g-2 mb-4 pb-2 border-bottom">
+            <div className="col-4">
+              <button
+                type="button"
+                className={`btn w-100 py-2 ${
+                  currentView === "active" ? "btn-primary shadow-sm" : "btn-outline-secondary"
+                }`}
+                onClick={() => setCurrentView("active")}
+              >
+                Active ({activeTasks.length})
+              </button>
+            </div>
+            <div className="col-4">
+              <button
+                type="button"
+                className={`btn w-100 py-2 ${
+                  currentView === "completed_today" ? "btn-primary shadow-sm" : "btn-outline-secondary"
+                }`}
+                onClick={() => setCurrentView("completed_today")}
+              >
+                Completed Today ({completedTodayTasks.length})
+              </button>
+            </div>
+            <div className="col-4">
+              <button
+                type="button"
+                className={`btn w-100 py-2 ${
+                  currentView === "history" ? "btn-primary shadow-sm" : "btn-outline-secondary"
+                }`}
+                onClick={() => setCurrentView("history")}
+              >
+                History ({historyTasks.length})
+              </button>
+            </div>
           </div>
 
-          {tasks.length === 0 ? (
-            <div className="text-center py-4 text-muted">
-              No tasks yet. Add a task above to get started!
+          {/* List Content */}
+          {loading ? (
+            <div className="text-center py-5 text-muted">
+              <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+              Loading tasks...
             </div>
-          ) : (
-            <div className="d-flex flex-column gap-2">
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`d-flex justify-content-between align-items-center p-3 rounded border ${
-                    task.completed ? "bg-light opacity-75" : "bg-white"
-                  }`}
+          ) : currentView === "active" ? (
+            activeTasks.length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <p className="mb-2">No active tasks created today. You're all caught up! 🎉</p>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => setIsModalOpen(true)}
                 >
-                  <div className="d-flex align-items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="form-check-input mt-0"
-                      checked={task.completed}
-                      onChange={() => handleToggleTask(task.id)}
-                      id={`task-${task.id}`}
-                    />
-                    <label
-                      htmlFor={`task-${task.id}`}
-                      className={`form-check-label mb-0 ${
-                        task.completed ? "text-decoration-line-through text-muted" : "fw-medium"
-                      }`}
-                      role="button"
-                    >
-                      {task.title}
-                    </label>
-                    <span className="badge bg-secondary-subtle text-secondary-emphasis">
-                      {task.category}
-                    </span>
-                    {task.isDaily && (
-                      <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">
-                        Daily
-                      </span>
-                    )}
+                  Create a New Task
+                </button>
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-2">
+                {activeTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onToggle={handleToggleTask}
+                    onDelete={handleDeleteTask}
+                    isProcessing={processingId === task.id}
+                  />
+                ))}
+              </div>
+            )
+          ) : currentView === "completed_today" ? (
+            completedTodayTasks.length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <p className="mb-0">No tasks completed today yet. Keep building!</p>
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-2">
+                {completedTodayTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onToggle={handleToggleTask}
+                    onDelete={handleDeleteTask}
+                    isProcessing={processingId === task.id}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            // History View (Grouped by createdAt date, newest first)
+            groupedHistory.length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <p className="mb-0">No past tasks found in history.</p>
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-4">
+                {groupedHistory.map(([dateLabel, items]) => (
+                  <div key={dateLabel}>
+                    <h6 className="fw-bold text-secondary border-bottom pb-2 mb-3">
+                      📅 {dateLabel}
+                    </h6>
+                    <div className="d-flex flex-column gap-2">
+                      {items.map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onToggle={handleToggleTask}
+                          onDelete={handleDeleteTask}
+                          isProcessing={processingId === task.id}
+                        />
+                      ))}
+                    </div>
                   </div>
-
-                  <div className="d-flex align-items-center gap-2">
-                    <span
-                      className={`badge ${
-                        task.completed ? "bg-success" : "bg-warning text-dark"
-                      }`}
-                    >
-                      {task.completed ? "Completed" : "Pending"}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-outline-danger btn-sm"
-                      onClick={() => handleDeleteTask(task.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
+
+      {/* Task Creation Modal */}
+      <TaskModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onTaskCreated={handleTaskCreated}
+        categories={CATEGORIES}
+      />
     </div>
   );
 };
