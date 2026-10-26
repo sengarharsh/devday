@@ -26,6 +26,8 @@ public class Task {
 
     private boolean dailyTask = false;
 
+    private LocalDateTime completedAt;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
@@ -33,6 +35,9 @@ public class Task {
     protected void onCreate() {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
+        }
+        if (this.completed && this.completedAt == null) {
+            this.completedAt = LocalDateTime.now();
         }
     }
 }

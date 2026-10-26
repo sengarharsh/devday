@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/dsa", "/api/dsa/questions"})
+@RequestMapping({"/api/dsa"})
 @CrossOrigin(origins = "*")
 public class DSAController {
 

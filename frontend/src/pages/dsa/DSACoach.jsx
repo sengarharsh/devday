@@ -1,6 +1,15 @@
 import { useState } from "react";
 
-const DSACoach = () => {
+const difficultyBadge = (difficulty) => {
+  const colors = {
+    easy: "bg-success",
+    medium: "bg-warning text-dark",
+    hard: "bg-danger",
+  };
+  return colors[difficulty?.toLowerCase()] || "bg-secondary";
+};
+
+const DSACoach = ({ selectedQuestion, onClearSelectedQuestion }) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
     {
@@ -37,6 +46,40 @@ const DSACoach = () => {
         <small className="text-muted">Work through problems step-by-step with guided hints</small>
       </div>
 
+      {/* Active Problem Banner */}
+      {selectedQuestion && (
+        <div className="bg-primary-subtle border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <span className="badge bg-primary">Active Problem</span>
+            <span className="fw-semibold">
+              {selectedQuestion.questionNumber ? `#${selectedQuestion.questionNumber} ` : ""}
+              {selectedQuestion.title}
+            </span>
+            {selectedQuestion.topic && (
+              <span className="badge bg-secondary-subtle text-secondary-emphasis">
+                {selectedQuestion.topic}
+              </span>
+            )}
+            {selectedQuestion.difficulty && (
+              <span className={`badge ${difficultyBadge(selectedQuestion.difficulty)}`}>
+                {selectedQuestion.difficulty.charAt(0).toUpperCase() +
+                  selectedQuestion.difficulty.slice(1)}
+              </span>
+            )}
+          </div>
+          {onClearSelectedQuestion && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary ms-2"
+              onClick={onClearSelectedQuestion}
+              title="Clear active problem"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Chat Messages */}
       <div className="card-body overflow-auto d-flex flex-column gap-3 p-3">
         {messages.map((msg) => (
@@ -67,7 +110,11 @@ const DSACoach = () => {
           <input
             type="text"
             className="form-control"
-            placeholder="Describe a problem or paste a question..."
+            placeholder={
+              selectedQuestion
+                ? `Ask for a hint about ${selectedQuestion.title}...`
+                : "Describe a problem or paste a question..."
+            }
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />

@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DSADashboard from "./dsa/DSADashboard";
-import AddQuestion from "./dsa/AddQuestion";
+import AllQuestions from "./dsa/AllQuestions";
 import DSACoach from "./dsa/DSACoach";
 import SolvedQuestions from "./dsa/SolvedQuestions";
 import BookmarkedQuestions from "./dsa/BookmarkedQuestions";
+import AddQuestionModal from "./dsa/AddQuestionModal";
+import { getAllDSAQuestions } from "../api/api";
 
 const tabs = [
   { key: "dashboard", label: "DSA Dashboard" },
-  { key: "add", label: "Add Question" },
+  { key: "questions", label: "Question List" },
   { key: "coach", label: "DSA Coach" },
   { key: "solved", label: "Solved Questions" },
   { key: "bookmarked", label: "Bookmarked Questions" }
@@ -16,64 +18,89 @@ const tabs = [
 const DSA = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [questions, setQuestions] = useState([]);
+  const [selectedQuestionForCoach, setSelectedQuestionForCoach] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const fetchQuestions = async () => {
+    try {
+      const data = await getAllDSAQuestions();
+      setQuestions(data);
+    } catch (err) {
+      console.error("Failed to fetch DSA questions:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuestions();
+  }, [activeTab, refreshKey]);
 
   const handleSave = (newQuestion) => {
     setQuestions((prev) => [newQuestion, ...prev]);
+    setRefreshKey((prev) => prev + 1);
   };
 
-  const handleToggleComplete = (id) => {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, completed: !q.completed } : q))
-    );
+  const handleSelectQuestionForCoach = (question) => {
+    setSelectedQuestionForCoach(question);
+    setActiveTab("coach");
   };
 
-  const handleToggleBookmark = (id) => {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, bookmarked: !q.bookmarked } : q))
-    );
-  };
-
-  const handleDelete = (id) => {
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  const handleClearSelectedQuestion = () => {
+    setSelectedQuestionForCoach(null);
   };
 
   const renderTab = () => {
     switch (activeTab) {
       case "dashboard":
-        return <DSADashboard questions={questions} />;
-      case "add":
-        return <AddQuestion onSave={handleSave} />;
+        return (
+          <DSADashboard
+            questions={questions}
+            onSelectQuestionForCoach={handleSelectQuestionForCoach}
+          />
+        );
+      case "questions":
+        return (
+          <AllQuestions
+            onQuestionsChange={setQuestions}
+            refreshTrigger={refreshKey}
+          />
+        );
       case "coach":
-        return <DSACoach />;
+        return (
+          <DSACoach
+            selectedQuestion={selectedQuestionForCoach}
+            onClearSelectedQuestion={handleClearSelectedQuestion}
+          />
+        );
       case "solved":
-        return (
-          <SolvedQuestions
-            questions={questions}
-            onToggleComplete={handleToggleComplete}
-            onToggleBookmark={handleToggleBookmark}
-            onDelete={handleDelete}
-          />
-        );
+        return <SolvedQuestions />;
       case "bookmarked":
+        return <BookmarkedQuestions />;
+      default:
         return (
-          <BookmarkedQuestions
+          <DSADashboard
             questions={questions}
-            onToggleComplete={handleToggleComplete}
-            onToggleBookmark={handleToggleBookmark}
-            onDelete={handleDelete}
+            onSelectQuestionForCoach={handleSelectQuestionForCoach}
           />
         );
-      default:
-        return <DSADashboard questions={questions} />;
     }
   };
 
   return (
     <div>
       {/* Page Header */}
-      <div className="mb-4">
-        <h2 className="fw-bold mb-1">DSA</h2>
-        <p className="text-muted mb-0">Add Questions and Manage your Daily Practice</p>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="fw-bold mb-1">DSA</h2>
+          <p className="text-muted mb-0">Manage your Daily Practice & Questions</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary d-flex align-items-center gap-2"
+          onClick={() => setIsAddModalOpen(true)}
+        >
+          <span>+</span> Add Question
+        </button>
       </div>
 
       {/* Tab Navigation */}
@@ -92,6 +119,13 @@ const DSA = () => {
 
       {/* Active Tab Content */}
       {renderTab()}
+
+      {/* Add Question Modal */}
+      <AddQuestionModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={handleSave}
+      />
     </div>
   );
 };

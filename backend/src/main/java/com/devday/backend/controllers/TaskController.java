@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -26,6 +27,9 @@ public class TaskController {
 
     @PostMapping
     public ResponseEntity<Task> addTask(@RequestBody Task task) {
+        if (task.isCompleted() && task.getCompletedAt() == null) {
+            task.setCompletedAt(LocalDateTime.now());
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(taskRepository.save(task));
     }
 
@@ -35,6 +39,15 @@ public class TaskController {
                 .map(existing -> {
                     existing.setTitle(task.getTitle());
                     existing.setSkill(task.getSkill());
+                    
+                    if (task.isCompleted() && !existing.isCompleted()) {
+                        existing.setCompletedAt(task.getCompletedAt() != null ? task.getCompletedAt() : LocalDateTime.now());
+                    } else if (!task.isCompleted()) {
+                        existing.setCompletedAt(null);
+                    } else if (task.getCompletedAt() != null) {
+                        existing.setCompletedAt(task.getCompletedAt());
+                    }
+
                     existing.setCompleted(task.isCompleted());
                     existing.setDailyTask(task.isDailyTask());
                     return ResponseEntity.ok(taskRepository.save(existing));
