@@ -27,6 +27,9 @@ public class DSA {
     private String difficulty;
 
     @Column(columnDefinition = "TEXT")
+    private String problemStatement;
+
+    @Column(columnDefinition = "TEXT")
     private String notes;
 
     private boolean completed = false;

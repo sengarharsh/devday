@@ -47,6 +47,15 @@ public class DSAController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<DSA> updateQuestion(
+            @PathVariable Long id,
+            @RequestBody DSA question
+    ) {
+        DSA updated = dsaService.updateQuestion(id, question);
+        return ResponseEntity.ok(updated);
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<DSA> updateQuestionStatus(
             @PathVariable Long id,

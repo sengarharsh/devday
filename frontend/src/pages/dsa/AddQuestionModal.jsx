@@ -1,16 +1,37 @@
-import { useState } from "react";
-import { createDSAQuestion } from "../../api/api";
+import { useState, useEffect } from "react";
+import { createDSAQuestion, updateDSAQuestion } from "../../api/api";
 
-const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
+const AddQuestionModal = ({ isOpen, onClose, onSave, editingQuestion = null }) => {
   const [questionNumber, setQuestionNumber] = useState("");
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState("");
+  const [problemStatement, setProblemStatement] = useState("");
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitType, setSubmitType] = useState(null); // "save" | "bookmark"
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingQuestion) {
+        setQuestionNumber(
+          editingQuestion.questionNumber != null
+            ? String(editingQuestion.questionNumber)
+            : ""
+        );
+        setTitle(editingQuestion.title || "");
+        setTopic(editingQuestion.topic || "");
+        setDifficulty(editingQuestion.difficulty?.toLowerCase() || "");
+        setProblemStatement(editingQuestion.problemStatement || "");
+        setNotes(editingQuestion.notes || "");
+        setError(null);
+      } else {
+        resetForm();
+      }
+    }
+  }, [isOpen, editingQuestion]);
 
   if (!isOpen) return null;
 
@@ -19,6 +40,7 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
     setTitle("");
     setTopic("");
     setDifficulty("");
+    setProblemStatement("");
     setNotes("");
     setError(null);
   };
@@ -29,7 +51,15 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
   };
 
   const handleSaveQuestion = async (isBookmarked) => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setError("Question title is required.");
+      return;
+    }
+
+    if (!problemStatement.trim()) {
+      setError("Problem statement is required.");
+      return;
+    }
 
     const parsedQuestionNumber = questionNumber.trim()
       ? parseInt(questionNumber.trim(), 10)
@@ -40,9 +70,15 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
       questionNumber: isNaN(parsedQuestionNumber) ? null : parsedQuestionNumber,
       topic: topic.trim() || null,
       difficulty: difficulty || null,
+      problemStatement: problemStatement.trim(),
       notes: notes.trim() || null,
-      completed: false,
-      bookmarked: isBookmarked,
+      completed: editingQuestion ? editingQuestion.completed : false,
+      bookmarked:
+        isBookmarked !== undefined
+          ? isBookmarked
+          : editingQuestion
+          ? editingQuestion.bookmarked
+          : false,
     };
 
     try {
@@ -50,11 +86,16 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
       setSubmitType(isBookmarked ? "bookmark" : "save");
       setError(null);
 
-      const createdQuestion = await createDSAQuestion(payload);
+      let saved;
+      if (editingQuestion) {
+        saved = await updateDSAQuestion(editingQuestion.id, payload);
+      } else {
+        saved = await createDSAQuestion(payload);
+      }
 
       resetForm();
       if (onSave) {
-        onSave(createdQuestion);
+        onSave(saved);
       }
       onClose();
     } catch (err) {
@@ -69,6 +110,8 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
     }
   };
 
+  const isFormValid = Boolean(title.trim() && problemStatement.trim());
+
   return (
     <div
       className="modal fade show d-block"
@@ -79,7 +122,9 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
       <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div className="modal-content shadow border-0">
           <div className="modal-header border-bottom">
-            <h5 className="modal-title fw-bold">Add New DSA Question</h5>
+            <h5 className="modal-title fw-bold">
+              {editingQuestion ? "Edit DSA Question" : "Add New DSA Question"}
+            </h5>
             <button
               type="button"
               className="btn-close"
@@ -89,7 +134,14 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
             ></button>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); handleSaveQuestion(false); }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveQuestion(
+                editingQuestion ? editingQuestion.bookmarked : false
+              );
+            }}
+          >
             <div className="modal-body p-4">
               {error && (
                 <div className="alert alert-danger py-2 small mb-3" role="alert">
@@ -155,12 +207,30 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
                 </div>
               </div>
 
-              <div className="mb-2">
-                <label className="form-label fw-semibold small">Notes / Tips</label>
+              {/* Problem Statement (Required) */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold small">
+                  Problem Statement <span className="text-danger">*</span>
+                </label>
                 <textarea
                   className="form-control"
-                  rows="3"
-                  placeholder="Key observations, time/space complexity goals, edge cases..."
+                  rows="5"
+                  placeholder="Include the problem description, example inputs and outputs, requirements, constraints, and edge cases..."
+                  value={problemStatement}
+                  onChange={(e) => setProblemStatement(e.target.value)}
+                  disabled={submitting}
+                />
+              </div>
+
+              {/* Notes / Tips (Optional) */}
+              <div className="mb-2">
+                <label className="form-label fw-semibold small">
+                  Notes / Tips <span className="text-muted fw-normal">(Optional)</span>
+                </label>
+                <textarea
+                  className="form-control"
+                  rows="2"
+                  placeholder="Key observations, approach ideas, time/space complexity goals..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   disabled={submitting}
@@ -177,20 +247,28 @@ const AddQuestionModal = ({ isOpen, onClose, onSave }) => {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="btn btn-outline-warning"
-                onClick={() => handleSaveQuestion(true)}
-                disabled={submitting || !title.trim()}
-              >
-                {submitting && submitType === "bookmark" ? "Saving..." : "★ Bookmark & Save"}
-              </button>
+              {!editingQuestion && (
+                <button
+                  type="button"
+                  className="btn btn-outline-warning"
+                  onClick={() => handleSaveQuestion(true)}
+                  disabled={submitting || !isFormValid}
+                >
+                  {submitting && submitType === "bookmark"
+                    ? "Saving..."
+                    : "★ Bookmark & Save"}
+                </button>
+              )}
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={submitting || !title.trim()}
+                disabled={submitting || !isFormValid}
               >
-                {submitting && submitType === "save" ? "Saving..." : "Save Question"}
+                {submitting && submitType === "save"
+                  ? "Saving..."
+                  : editingQuestion
+                  ? "Update Question"
+                  : "Save Question"}
               </button>
             </div>
           </form>

@@ -39,6 +39,22 @@ public class DSAService {
         return dsaRepository.findById(id);
     }
 
+    public DSA updateQuestion(Long id, DSA updated) {
+        DSA question = dsaRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found with id: " + id));
+
+        question.setTitle(updated.getTitle());
+        question.setQuestionNumber(updated.getQuestionNumber());
+        question.setTopic(updated.getTopic());
+        question.setDifficulty(updated.getDifficulty());
+        question.setProblemStatement(updated.getProblemStatement());
+        question.setNotes(updated.getNotes());
+        question.setCompleted(updated.isCompleted());
+        question.setBookmarked(updated.isBookmarked());
+
+        return dsaRepository.save(question);
+    }
+
     public DSA updateQuestionStatus(Long id, Map<String, Boolean> updates) {
         DSA question = dsaRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found with id: " + id));

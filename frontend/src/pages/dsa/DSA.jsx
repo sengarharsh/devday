@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react";
-import DSADashboard from "./dsa/DSADashboard";
-import AllQuestions from "./dsa/AllQuestions";
-import DSACoach from "./dsa/DSACoach";
-import SolvedQuestions from "./dsa/SolvedQuestions";
-import BookmarkedQuestions from "./dsa/BookmarkedQuestions";
-import AddQuestionModal from "./dsa/AddQuestionModal";
-import { getAllDSAQuestions } from "../api/api";
+import DSADashboard from "./DSADashboard";
+import AllQuestions from "./AllQuestions";
+import DSACoach from "./DSACoach";
+import SolvedQuestions from "./SolvedQuestions";
+import BookmarkedQuestions from "./BookmarkedQuestions";
+import AddQuestionModal from "./AddQuestionModal";
+import { getAllDSAQuestions } from "../../api/api";
 
 const tabs = [
   { key: "dashboard", label: "DSA Dashboard" },
   { key: "questions", label: "Question List" },
   { key: "coach", label: "DSA Coach" },
   { key: "solved", label: "Solved Questions" },
-  { key: "bookmarked", label: "Bookmarked Questions" }
+  { key: "bookmarked", label: "Bookmarked Questions" },
 ];
 
 const DSA = () => {
@@ -63,6 +63,7 @@ const DSA = () => {
           <AllQuestions
             onQuestionsChange={setQuestions}
             refreshTrigger={refreshKey}
+            onSelectQuestionForCoach={handleSelectQuestionForCoach}
           />
         );
       case "coach":
@@ -73,9 +74,19 @@ const DSA = () => {
           />
         );
       case "solved":
-        return <SolvedQuestions />;
+        return (
+          <SolvedQuestions
+            onSelectQuestionForCoach={handleSelectQuestionForCoach}
+            onQuestionsChange={() => setRefreshKey((prev) => prev + 1)}
+          />
+        );
       case "bookmarked":
-        return <BookmarkedQuestions />;
+        return (
+          <BookmarkedQuestions
+            onSelectQuestionForCoach={handleSelectQuestionForCoach}
+            onQuestionsChange={() => setRefreshKey((prev) => prev + 1)}
+          />
+        );
       default:
         return (
           <DSADashboard
@@ -87,24 +98,28 @@ const DSA = () => {
   };
 
   return (
-    <div>
+    <div className="d-flex flex-column flex-grow-1">
       {/* Page Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-2">
         <div>
-          <h2 className="fw-bold mb-1">DSA</h2>
-          <p className="text-muted mb-0">Manage your Daily Practice & Questions</p>
+          <h2 className="fw-bold mb-0" style={{ fontSize: "1.5rem" }}>
+            DSA
+          </h2>
+          <p className="text-muted small mb-0">
+            Manage your Daily Practice & Questions
+          </p>
         </div>
         <button
           type="button"
           className="btn btn-primary d-flex align-items-center gap-2"
           onClick={() => setIsAddModalOpen(true)}
         >
-          <span>+</span> Add Question
+          <span className="fw-bold fs-6">+</span> Add Question
         </button>
       </div>
 
       {/* Tab Navigation */}
-      <ul className="nav nav-tabs mb-4">
+      <ul className="nav nav-tabs mb-3">
         {tabs.map((tab) => (
           <li key={tab.key} className="nav-item">
             <button
@@ -118,7 +133,9 @@ const DSA = () => {
       </ul>
 
       {/* Active Tab Content */}
-      {renderTab()}
+      <div className="flex-grow-1 d-flex flex-column" style={{ minHeight: 0 }}>
+        {renderTab()}
+      </div>
 
       {/* Add Question Modal */}
       <AddQuestionModal

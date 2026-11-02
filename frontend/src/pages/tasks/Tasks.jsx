@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { getAllTasks, createTask, updateTask, deleteTask } from "../api/api";
-import TaskModal from "../components/tasks/TaskModal";
-import TaskSummaryCards from "../components/tasks/TaskSummaryCards";
-import TaskItem from "../components/tasks/TaskItem";
+import { getAllTasks, createTask, updateTask, deleteTask } from "../../api/api";
+import TaskModal from "./TaskModal";
+import TaskSummaryCards from "./TaskSummaryCards";
+import TaskItem from "./TaskItem";
 
 const CATEGORIES = ["DSA", "React", "Java", "Project", "Other"];
 

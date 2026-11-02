@@ -1,32 +1,4 @@
-const SAMPLE_RECOMMENDATIONS = [
-  {
-    id: "sample-rec-1",
-    questionNumber: 20,
-    title: "Valid Parentheses",
-    topic: "Stack",
-    difficulty: "easy",
-    reason: "Reinforces foundational LIFO stack patterns following your recent practice.",
-    completed: false,
-  },
-  {
-    id: "sample-rec-2",
-    questionNumber: 33,
-    title: "Search in Rotated Sorted Array",
-    topic: "Binary Search",
-    difficulty: "medium",
-    reason: "Recommended to strengthen binary search edge cases and boundary conditions.",
-    completed: false,
-  },
-  {
-    id: "sample-rec-3",
-    questionNumber: 1,
-    title: "Two Sum",
-    topic: "Arrays & Hashing",
-    difficulty: "easy",
-    reason: "Core frequency counting and hash map lookup technique.",
-    completed: true,
-  },
-];
+import { useMemo } from "react";
 
 const difficultyBadge = (difficulty) => {
   const colors = {
@@ -37,206 +9,298 @@ const difficultyBadge = (difficulty) => {
   return colors[difficulty?.toLowerCase()] || "bg-secondary";
 };
 
+const isToday = (dateString) => {
+  if (!dateString) return false;
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+};
+
+const isSolvedToday = (q) => {
+  if (!q || !q.completed) return false;
+  if (q.completedAt && isToday(q.completedAt)) return true;
+  if (q.solvedAt && isToday(q.solvedAt)) return true;
+  if (q.updatedAt && isToday(q.updatedAt)) return true;
+  if (q.createdAt && isToday(q.createdAt)) return true;
+  return false;
+};
+
 const DSADashboard = ({ questions = [], onSelectQuestionForCoach }) => {
   const total = questions.length;
   const completed = questions.filter((q) => q.completed).length;
   const bookmarked = questions.filter((q) => q.bookmarked).length;
-  const easy = questions.filter((q) => q.difficulty?.toLowerCase() === "easy").length;
-  const medium = questions.filter((q) => q.difficulty?.toLowerCase() === "medium").length;
-  const hard = questions.filter((q) => q.difficulty?.toLowerCase() === "hard").length;
   const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  // Questions solved today
+  const solvedToday = useMemo(() => {
+    return questions.filter((q) => isSolvedToday(q));
+  }, [questions]);
+
+  // Up to 3 unsolved questions from actual data
+  const unsolvedQuestions = useMemo(() => {
+    return questions.filter((q) => !q.completed).slice(0, 3);
+  }, [questions]);
+
+  // Difficulty counts (solved vs total)
+  const difficulties = useMemo(() => {
+    return [
+      {
+        label: "Easy",
+        color: "success",
+        total: questions.filter((q) => q.difficulty?.toLowerCase() === "easy").length,
+        solved: questions.filter(
+          (q) => q.difficulty?.toLowerCase() === "easy" && q.completed
+        ).length,
+      },
+      {
+        label: "Medium",
+        color: "warning",
+        total: questions.filter((q) => q.difficulty?.toLowerCase() === "medium").length,
+        solved: questions.filter(
+          (q) => q.difficulty?.toLowerCase() === "medium" && q.completed
+        ).length,
+      },
+      {
+        label: "Hard",
+        color: "danger",
+        total: questions.filter((q) => q.difficulty?.toLowerCase() === "hard").length,
+        solved: questions.filter(
+          (q) => q.difficulty?.toLowerCase() === "hard" && q.completed
+        ).length,
+      },
+    ];
+  }, [questions]);
+
   // Top 5 topics by number of solved questions
-  const topicCounts = {};
-  questions.forEach((q) => {
-    if (q.topic && q.completed) {
-      topicCounts[q.topic] = (topicCounts[q.topic] || 0) + 1;
-    }
-  });
-  const topTopics = Object.entries(topicCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  const topTopics = useMemo(() => {
+    const topicCounts = {};
+    questions.forEach((q) => {
+      if (q.topic && q.completed) {
+        topicCounts[q.topic] = (topicCounts[q.topic] || 0) + 1;
+      }
+    });
+    return Object.entries(topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4);
+  }, [questions]);
 
-  // Recent solved questions (last 5)
-  const recentSolved = questions.filter((q) => q.completed).slice(0, 5);
-
+  // 5 Summary Stat Cards
   const statCards = [
     { label: "Total Questions", value: total, color: "primary" },
-    { label: "Completed", value: completed, color: "success" },
+    { label: "Solved", value: completed, color: "success" },
+    { label: "Solved Today", value: solvedToday.length, color: "success" },
     { label: "Bookmarked", value: bookmarked, color: "warning" },
     { label: "Completion %", value: `${completionPct}%`, color: "info" },
   ];
 
-  const difficultyCards = [
-    { label: "Easy", value: easy, color: "success" },
-    { label: "Medium", value: medium, color: "warning" },
-    { label: "Hard", value: hard, color: "danger" },
-  ];
-
   return (
-    <div>
-      {/* Summary Stats */}
-      <div className="row g-3 mb-4">
+    <div className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+      {/* 1. Summary Cards (5 Cards) */}
+      <div className="row g-2 g-md-3 mb-3">
         {statCards.map((card) => (
-          <div key={card.label} className="col-6 col-lg-3">
+          <div key={card.label} className="col-6 col-sm-6 col-md-4 col-lg">
             <div className="card shadow-sm border-0 h-100">
-              <div className="card-body text-center">
-                <h6 className="text-muted small text-uppercase fw-semibold mb-2">
+              <div className="card-body p-3">
+                <span
+                  className="card-subtitle text-secondary d-block text-uppercase fw-semibold mb-2 text-truncate"
+                  style={{ fontSize: "0.72rem", letterSpacing: "0.5px" }}
+                  title={card.label}
+                >
                   {card.label}
-                </h6>
-                <h3 className={`fw-bold text-${card.color} mb-0`}>{card.value}</h3>
+                </span>
+                <div className={`fs-3 fw-bold text-${card.color} lh-1`}>
+                  {card.value}
+                </div>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Recommended for You (AI Integration Preparation) */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-body">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div>
-              <h5 className="fw-bold mb-0">Recommended for You</h5>
-              <small className="text-muted">
-                Targeted practice based on your solved topics and improvement areas
-              </small>
+      {/* 2. Middle Row: Difficulty Breakdown & Continue Practicing */}
+      <div className="row g-3 mb-3 flex-grow-1" style={{ minHeight: "220px" }}>
+        {/* Left Half: Difficulty Breakdown (Layered Easy, Medium, Hard) */}
+        <div className="col-12 col-lg-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body p-3 p-md-4 d-flex flex-column">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="card-title fw-bold mb-0" style={{ fontSize: "1rem" }}>
+                  Difficulty Breakdown
+                </h6>
+                <span className="text-muted small">
+                  {completed} / {total} Solved
+                </span>
+              </div>
+
+              {total === 0 ? (
+                <div className="text-muted text-center py-4 small flex-grow-1 d-flex align-items-center justify-content-center">
+                  Add questions to view difficulty progress.
+                </div>
+              ) : (
+                <div className="d-flex flex-column justify-content-between flex-grow-1 gap-2">
+                  {difficulties.map((d) => {
+                    const pct =
+                      d.total > 0 ? Math.round((d.solved / d.total) * 100) : 0;
+                    return (
+                      <div key={d.label} className="p-3 rounded bg-light border">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span
+                            className={`badge ${difficultyBadge(d.label)} py-1 px-2`}
+                            style={{ fontSize: "0.75rem" }}
+                          >
+                            {d.label}
+                          </span>
+                          <span
+                            className="text-muted fw-medium"
+                            style={{ fontSize: "0.85rem" }}
+                          >
+                            {d.solved} / {d.total}{" "}
+                            <span className="text-secondary">({pct}%)</span>
+                          </span>
+                        </div>
+                        <div className="progress" style={{ height: "8px" }}>
+                          <div
+                            className={`progress-bar bg-${d.color}`}
+                            role="progressbar"
+                            style={{ width: `${pct}%` }}
+                            aria-valuenow={pct}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">
-              Sample Preview (AI in V2)
-            </span>
           </div>
+        </div>
 
-          <div className="row g-3">
-            {SAMPLE_RECOMMENDATIONS.map((rec) => {
-              // Check if already completed in sample or in actual questions
-              const isSolved =
-                rec.completed ||
-                questions.some(
-                  (q) =>
-                    q.completed &&
-                    q.title?.toLowerCase() === rec.title?.toLowerCase()
-                );
-
-              return (
-                <div key={rec.id} className="col-12 col-md-4">
-                  <div
-                    className={`p-3 rounded border h-100 d-flex flex-column justify-content-between ${
-                      isSolved ? "bg-light opacity-75" : "bg-white"
-                    }`}
-                    style={{ cursor: isSolved ? "default" : "pointer" }}
-                    onClick={() => {
-                      if (!isSolved && onSelectQuestionForCoach) {
-                        onSelectQuestionForCoach(rec);
-                      }
-                    }}
+        {/* Right Half: Continue Practicing */}
+        <div className="col-12 col-lg-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body p-3 p-md-4 d-flex flex-column">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="card-title fw-bold mb-0" style={{ fontSize: "1rem" }}>
+                  Continue Practicing
+                </h6>
+                {unsolvedQuestions.length > 0 && (
+                  <span
+                    className="badge bg-primary-subtle text-primary-emphasis py-1 px-2"
+                    style={{ fontSize: "0.75rem" }}
                   >
-                    <div>
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <span className="fw-semibold">
-                          {rec.questionNumber && (
-                            <span className="text-secondary me-1">
-                              #{rec.questionNumber}
+                    {unsolvedQuestions.length} Next Up
+                  </span>
+                )}
+              </div>
+
+              {unsolvedQuestions.length === 0 ? (
+                <div className="d-flex flex-column justify-content-center align-items-center flex-grow-1 text-center py-4">
+                  <p className="text-muted mb-0 small">
+                    {total === 0
+                      ? 'No questions added yet. Use "+ Add Question" above to get started!'
+                      : "All caught up! You've solved all your added questions. 🎉"}
+                  </p>
+                </div>
+              ) : (
+                <div className="d-flex flex-column justify-content-start gap-2 flex-grow-1">
+                  {unsolvedQuestions.map((q) => (
+                    <div
+                      key={q.id}
+                      className="p-3 rounded border bg-light d-flex justify-content-between align-items-center"
+                      style={{ cursor: "pointer", transition: "all 0.15s ease-in-out" }}
+                      onClick={() =>
+                        onSelectQuestionForCoach && onSelectQuestionForCoach(q)
+                      }
+                      role="button"
+                      title="Click to practice with DSA Coach"
+                    >
+                      <div className="me-2 overflow-hidden">
+                        <div
+                          className="fw-semibold text-truncate"
+                          title={q.title}
+                          style={{ fontSize: "0.925rem" }}
+                        >
+                          {q.questionNumber ? `#${q.questionNumber} ` : ""}
+                          {q.title}
+                        </div>
+                        <div className="d-flex gap-2 flex-wrap mt-1">
+                          {q.topic && (
+                            <span
+                              className="badge bg-secondary-subtle text-secondary-emphasis py-1 px-2"
+                              style={{ fontSize: "0.725rem" }}
+                            >
+                              {q.topic}
                             </span>
                           )}
-                          {rec.title}
-                        </span>
-                        {isSolved ? (
-                          <span className="badge bg-success">Solved</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm py-0 px-2"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onSelectQuestionForCoach) {
-                                onSelectQuestionForCoach(rec);
-                              }
-                            }}
-                          >
-                            Coach &rarr;
-                          </button>
-                        )}
+                          {q.difficulty && (
+                            <span
+                              className={`badge ${difficultyBadge(q.difficulty)} py-1 px-2`}
+                              style={{ fontSize: "0.725rem" }}
+                            >
+                              {q.difficulty.charAt(0).toUpperCase() +
+                                q.difficulty.slice(1)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-
-                      <div className="d-flex gap-2 flex-wrap mb-2">
-                        {rec.topic && (
-                          <span className="badge bg-secondary-subtle text-secondary-emphasis">
-                            {rec.topic}
-                          </span>
-                        )}
-                        {rec.difficulty && (
-                          <span className={`badge ${difficultyBadge(rec.difficulty)}`}>
-                            {rec.difficulty.charAt(0).toUpperCase() +
-                              rec.difficulty.slice(1)}
-                          </span>
-                        )}
-                      </div>
+                      <span
+                        className="text-primary fw-semibold small text-nowrap d-flex align-items-center gap-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Coach &rarr;
+                      </span>
                     </div>
-
-                    <p className="text-muted small mb-0 pt-2 border-top">
-                      💡 <span>{rec.reason}</span>
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Difficulty Breakdown */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-body">
-          <h5 className="fw-bold mb-3">Difficulty Breakdown</h5>
-          {total === 0 ? (
-            <p className="text-muted mb-0">Add some questions to see the breakdown.</p>
-          ) : (
-            <div>
-              {difficultyCards.map((d) => {
-                const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
-                return (
-                  <div key={d.label} className="mb-3">
-                    <div className="d-flex justify-content-between mb-1">
-                      <span className="fw-medium">{d.label}</span>
-                      <span className="text-muted small">
-                        {d.value} ({pct}%)
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: "8px" }}>
-                      <div
-                        className={`progress-bar bg-${d.color}`}
-                        role="progressbar"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="row g-3">
+      {/* 3. Bottom Row: Topics & Solved Today (Side by Side) */}
+      <div className="row g-3 flex-grow-1" style={{ minHeight: "150px" }}>
         {/* Top Topics */}
-        <div className="col-12 col-md-6">
+        <div className="col-12 col-lg-6">
           <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h5 className="fw-bold mb-3">Top Topics (Solved)</h5>
+            <div className="card-body p-3 p-md-4 d-flex flex-column">
+              <h6 className="card-title fw-bold mb-3" style={{ fontSize: "1rem" }}>
+                Top Topics (Solved)
+              </h6>
               {topTopics.length === 0 ? (
-                <p className="text-muted mb-0">Solve questions to see your top topics.</p>
+                <div className="text-muted text-center py-3 small flex-grow-1 d-flex align-items-center justify-content-center">
+                  Solve questions to see top topics.
+                </div>
               ) : (
-                <div className="d-flex flex-column gap-2">
+                <div className="d-flex flex-column gap-2 flex-grow-1 justify-content-start">
                   {topTopics.map(([topic, count], index) => (
                     <div
                       key={topic}
-                      className="d-flex justify-content-between align-items-center p-2 rounded bg-light border"
+                      className="d-flex justify-content-between align-items-center py-2 px-3 rounded bg-light border"
+                      style={{ fontSize: "0.875rem" }}
                     >
-                      <span>
-                        <span className="badge bg-secondary me-2">{index + 1}</span>
+                      <span className="text-truncate me-2">
+                        <span
+                          className="badge bg-secondary me-2 py-1 px-2"
+                          style={{ fontSize: "0.725rem" }}
+                        >
+                          {index + 1}
+                        </span>
                         <span className="fw-medium">{topic}</span>
                       </span>
-                      <span className="badge bg-success">{count} solved</span>
+                      <span
+                        className="badge bg-success py-1 px-2 flex-shrink-0"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        {count} solved
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -245,31 +309,62 @@ const DSADashboard = ({ questions = [], onSelectQuestionForCoach }) => {
           </div>
         </div>
 
-        {/* Recently Solved */}
-        <div className="col-12 col-md-6">
+        {/* Solved Today */}
+        <div className="col-12 col-lg-6">
           <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h5 className="fw-bold mb-3">Recently Solved</h5>
-              {recentSolved.length === 0 ? (
-                <p className="text-muted mb-0">No solved questions yet. Keep practicing! 💪</p>
+            <div className="card-body p-3 p-md-4 d-flex flex-column">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="card-title fw-bold mb-0" style={{ fontSize: "1rem" }}>
+                  Solved Today
+                </h6>
+                {solvedToday.length > 0 && (
+                  <span
+                    className="badge bg-success-subtle text-success-emphasis py-1 px-2"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    {solvedToday.length} Solved Today
+                  </span>
+                )}
+              </div>
+              {solvedToday.length === 0 ? (
+                <div className="text-muted text-center py-3 small flex-grow-1 d-flex align-items-center justify-content-center">
+                  No questions solved today yet.
+                </div>
               ) : (
-                <div className="d-flex flex-column gap-2">
-                  {recentSolved.map((q) => (
+                <div className="d-flex flex-column gap-2 flex-grow-1 justify-content-start">
+                  {solvedToday.map((q) => (
                     <div
                       key={q.id}
-                      className="d-flex justify-content-between align-items-center p-2 rounded bg-light border"
+                      className="d-flex justify-content-between align-items-center py-2 px-3 rounded bg-light border"
+                      style={{ fontSize: "0.875rem" }}
                     >
-                      <span className="fw-medium">
-                        {q.questionNumber && (
-                          <span className="text-secondary me-1">#{q.questionNumber}</span>
-                        )}
+                      <span className="fw-medium text-truncate me-2">
+                        {q.questionNumber ? (
+                          <span className="text-secondary me-1">
+                            #{q.questionNumber}
+                          </span>
+                        ) : null}
                         {q.title}
                       </span>
-                      {q.difficulty && (
-                        <span className={`badge ${difficultyBadge(q.difficulty)}`}>
-                          {q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1)}
-                        </span>
-                      )}
+                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        {q.topic && (
+                          <span
+                            className="badge bg-secondary-subtle text-secondary-emphasis py-1 px-2"
+                            style={{ fontSize: "0.725rem" }}
+                          >
+                            {q.topic}
+                          </span>
+                        )}
+                        {q.difficulty && (
+                          <span
+                            className={`badge ${difficultyBadge(q.difficulty)} py-1 px-2`}
+                            style={{ fontSize: "0.725rem" }}
+                          >
+                            {q.difficulty.charAt(0).toUpperCase() +
+                              q.difficulty.slice(1)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
