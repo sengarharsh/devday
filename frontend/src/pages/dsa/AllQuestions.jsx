@@ -1,18 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   getAllDSAQuestions,
   updateDSAQuestionStatus,
   deleteDSAQuestion,
 } from "../../api/api";
 import QuestionList from "./QuestionList";
+import AddQuestionModal from "./AddQuestionModal";
 
-const AllQuestions = ({ onQuestionsChange, refreshTrigger }) => {
+const AllQuestions = ({
+  onQuestionsChange,
+  refreshTrigger,
+  onSelectQuestionForCoach,
+}) => {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [processingId, setProcessingId] = useState(null);
+
+  // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState("all");
+  const [filterTopic, setFilterTopic] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all"); // "all" | "solved" | "unsolved"
+
+  // Edit Modal State
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const fetchQuestions = async () => {
     try {
@@ -115,42 +128,125 @@ const AllQuestions = ({ onQuestionsChange, refreshTrigger }) => {
     }
   };
 
-  // Filter questions based on search and difficulty
-  const filteredQuestions = questions.filter((q) => {
-    const matchesSearch =
-      !searchQuery.trim() ||
-      q.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.topic?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (q.questionNumber && String(q.questionNumber).includes(searchQuery.trim()));
+  const handleOpenEdit = (question) => {
+    setEditingQuestion(question);
+    setIsEditModalOpen(true);
+  };
 
-    const matchesDifficulty =
-      filterDifficulty === "all" ||
-      q.difficulty?.toLowerCase() === filterDifficulty.toLowerCase();
+  const handleSaveEdited = (updatedQuestion) => {
+    setQuestions((prev) => {
+      const updated = prev.map((q) =>
+        q.id === updatedQuestion.id ? updatedQuestion : q
+      );
+      if (onQuestionsChange) onQuestionsChange(updated);
+      return updated;
+    });
+    setEditingQuestion(null);
+    setIsEditModalOpen(false);
+  };
 
-    return matchesSearch && matchesDifficulty;
-  });
+  // Distinct Topics for topic filter dropdown
+  const uniqueTopics = useMemo(() => {
+    const set = new Set();
+    questions.forEach((q) => {
+      if (q.topic?.trim()) set.add(q.topic.trim());
+    });
+    return Array.from(set).sort();
+  }, [questions]);
+
+  // Filtered Questions
+  const filteredQuestions = useMemo(() => {
+    return questions.filter((q) => {
+      const query = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        q.title?.toLowerCase().includes(query) ||
+        q.topic?.toLowerCase().includes(query) ||
+        q.problemStatement?.toLowerCase().includes(query) ||
+        q.notes?.toLowerCase().includes(query) ||
+        (q.questionNumber && String(q.questionNumber).includes(query));
+
+      const matchesDifficulty =
+        filterDifficulty === "all" ||
+        q.difficulty?.toLowerCase() === filterDifficulty.toLowerCase();
+
+      const matchesTopic =
+        filterTopic === "all" ||
+        q.topic?.toLowerCase() === filterTopic.toLowerCase();
+
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "solved" && q.completed) ||
+        (filterStatus === "unsolved" && !q.completed);
+
+      return (
+        matchesSearch && matchesDifficulty && matchesTopic && matchesStatus
+      );
+    });
+  }, [questions, searchQuery, filterDifficulty, filterTopic, filterStatus]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== "" ||
+    filterDifficulty !== "all" ||
+    filterTopic !== "all" ||
+    filterStatus !== "all";
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setFilterDifficulty("all");
+    setFilterTopic("all");
+    setFilterStatus("all");
+  };
 
   return (
     <div className="card shadow-sm border-0">
-      <div className="card-body">
+      <div className="card-body p-3 p-md-4">
+        {/* Header with Metrics */}
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="card-title fw-bold mb-0">Question List</h5>
-          <span className="badge bg-primary">{questions.length} Total</span>
+          <div>
+            <h5 className="card-title fw-bold mb-0">Question List</h5>
+            <small className="text-muted">
+              Browse, filter, and manage your DSA questions. Click any question to read the problem statement.
+            </small>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge bg-primary-subtle text-primary-emphasis py-1 px-2">
+              {filteredQuestions.length} of {questions.length} Questions
+            </span>
+          </div>
         </div>
 
         {/* Filter / Search Bar */}
         <div className="row g-2 mb-3">
-          <div className="col-12 col-md-8">
+          {/* Search by Title */}
+          <div className="col-12 col-md-4">
             <input
               type="text"
               className="form-control form-control-sm"
-              placeholder="Search by title, topic, or question #..."
+              placeholder="Search by title, topic, or #..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="col-12 col-md-4">
+
+          {/* Filter by Topic */}
+          <div className="col-6 col-md-3">
+            <select
+              className="form-select form-select-sm"
+              value={filterTopic}
+              onChange={(e) => setFilterTopic(e.target.value)}
+            >
+              <option value="all">All Topics</option>
+              {uniqueTopics.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter by Difficulty */}
+          <div className="col-6 col-md-2">
             <select
               className="form-select form-select-sm"
               value={filterDifficulty}
@@ -161,6 +257,32 @@ const AllQuestions = ({ onQuestionsChange, refreshTrigger }) => {
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
             </select>
+          </div>
+
+          {/* Filter by Solved / Unsolved */}
+          <div className="col-6 col-md-2">
+            <select
+              className="form-select form-select-sm"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="solved">Solved</option>
+              <option value="unsolved">Unsolved</option>
+            </select>
+          </div>
+
+          {/* Reset Filters */}
+          <div className="col-6 col-md-1">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm w-100"
+              onClick={handleResetFilters}
+              disabled={!hasActiveFilters}
+              title="Reset all filters"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
@@ -196,15 +318,28 @@ const AllQuestions = ({ onQuestionsChange, refreshTrigger }) => {
             questions={filteredQuestions}
             emptyMessage={
               questions.length === 0
-                ? "No questions added yet. Click 'Add Question' to get started! 🚀"
+                ? "No questions added yet. Click '+ Add Question' above to get started! 🚀"
                 : "No questions match your filter criteria."
             }
             onToggleComplete={handleToggleComplete}
             onToggleBookmark={handleToggleBookmark}
+            onEdit={handleOpenEdit}
             onDelete={handleDelete}
+            onSelectForCoach={onSelectQuestionForCoach}
             processingId={processingId}
           />
         )}
+
+        {/* Edit Question Modal */}
+        <AddQuestionModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingQuestion(null);
+          }}
+          onSave={handleSaveEdited}
+          editingQuestion={editingQuestion}
+        />
       </div>
     </div>
   );
